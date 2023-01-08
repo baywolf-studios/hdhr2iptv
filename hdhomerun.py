@@ -1,3 +1,4 @@
+import argparse
 import sys
 import json
 import datetime
@@ -48,7 +49,6 @@ def get_utc_offset_str():
 
 
 def ProcessProgram(xml, program, guideName):
-
     WriteLog("Processing Show: " + program["Title"])
 
     timezone_offset = get_utc_offset_str().replace(":", "")
@@ -60,17 +60,15 @@ def ProcessProgram(xml, program, guideName):
     # set the start date and time from the feed
     xmlProgram.set(
         "start",
-        datetime.fromtimestamp(program["StartTime"]).strftime("%Y%m%d%H%M%S")
-        + " "
-        + timezone_offset,
+        datetime.fromtimestamp(program["StartTime"]).strftime("%Y%m%d%H%M%S") +
+        " " + timezone_offset,
     )
 
     # set the end date and time from the feed
     xmlProgram.set(
         "stop",
-        datetime.fromtimestamp(program["EndTime"]).strftime("%Y%m%d%H%M%S")
-        + " "
-        + timezone_offset,
+        datetime.fromtimestamp(program["EndTime"]).strftime("%Y%m%d%H%M%S") +
+        " " + timezone_offset,
     )
 
     # Title
@@ -78,7 +76,8 @@ def ProcessProgram(xml, program, guideName):
 
     # Sub Title
     if "EpisodeTitle" in program:
-        ET.SubElement(xmlProgram, "sub-title", lang="en").text = program["EpisodeTitle"]
+        ET.SubElement(xmlProgram, "sub-title",
+                      lang="en").text = program["EpisodeTitle"]
 
     # Description
     if "Synopsis" in program:
@@ -92,18 +91,17 @@ def ProcessProgram(xml, program, guideName):
 
     if "EpisodeNumber" in program:
         # add the friendly display
-        ET.SubElement(xmlProgram, "episode-num", system="onscreen").text = program[
-            "EpisodeNumber"
-        ]
+        ET.SubElement(xmlProgram, "episode-num",
+                      system="onscreen").text = program["EpisodeNumber"]
         # Fake the xml version
         en = program["EpisodeNumber"]
         parts = en.split("E")
         season = parts[0].replace("S", "")
         episode = parts[1]
         # Assign the fake xml version
-        ET.SubElement(xmlProgram, "episode-num", system="xmltv_ns").text = (
-            season + " . " + episode + " . 0/1"
-        )
+        ET.SubElement(xmlProgram, "episode-num",
+                      system="xmltv_ns").text = (season + " . " + episode +
+                                                 " . 0/1")
         # set the category flag to series
         ET.SubElement(xmlProgram, "category", lang="en").text = "series"
         addedEpisode = True
@@ -114,11 +112,9 @@ def ProcessProgram(xml, program, guideName):
             ET.SubElement(
                 xmlProgram,
                 "previously-shown",
-                start=datetime.fromtimestamp(
-                    program["OriginalAirdate"] + 86400
-                ).strftime("%Y%m%d%H%M%S")
-                + " "
-                + timezone_offset,
+                start=datetime.fromtimestamp(program["OriginalAirdate"] +
+                                             86400).strftime("%Y%m%d%H%M%S") +
+                " " + timezone_offset,
             )
 
     if "ImageURL" in program:
@@ -129,7 +125,6 @@ def ProcessProgram(xml, program, guideName):
     ET.SubElement(xmlProgram, "subtitles", type="teletext")
 
     if "Filter" in program:
-
         # Search the filters and see if it is a movie
         FoundMovieCategory = False
         for filter in program["Filter"]:
@@ -142,19 +137,19 @@ def ProcessProgram(xml, program, guideName):
         if FoundMovieCategory == False and addedEpisode == False:
             ET.SubElement(xmlProgram, "category", lang="en").text = "series"
             # create a fake episode number for it
+            ET.SubElement(xmlProgram, "episode-num",
+                          system="xmltv_ns").text = DateTimeToEpisode()
             ET.SubElement(
-                xmlProgram, "episode-num", system="xmltv_ns"
-            ).text = DateTimeToEpisode()
-            ET.SubElement(
-                xmlProgram, "episode-num", system="onscreen"
-            ).text = DateTimeToEpisodeFriendly()
+                xmlProgram, "episode-num",
+                system="onscreen").text = DateTimeToEpisodeFriendly()
             addedEpisode = True
 
         for filter in program["Filter"]:
             # Lowercase the filter... apearenttly Plex is case sensitive
             filterstringLower = str(filter).lower()
             # add the filter as a category
-            ET.SubElement(xmlProgram, "category", lang="en").text = filterstringLower
+            ET.SubElement(xmlProgram, "category",
+                          lang="en").text = filterstringLower
             # If the filter is news or sports...
             # if (filterstringLower == "news" or filterstringLower == "sports"):
             # 	#And the show didn't have it's own episode number...
@@ -171,10 +166,8 @@ def ProcessProgram(xml, program, guideName):
 
 
 def processChannel(xml, data, deviceAuth):
-
-    WriteLog(
-        "Processing Channel: " + data.get("GuideNumber") + " " + data.get("GuideName")
-    )
+    WriteLog("Processing Channel: " + data.get("GuideNumber") + " " +
+             data.get("GuideName"))
 
     # channel
     xmlChannel = ET.SubElement(xml, "channel", id=data.get("GuideName"))
@@ -204,12 +197,13 @@ def processChannel(xml, data, deviceAuth):
     # So if we do this 21 times we will have fetched the complete week
     try:
         while counter < 24:
-            chanData = GetHdConnectChannelPrograms(
-                deviceAuth, data.get("GuideNumber"), maxTime
-            )
+            chanData = GetHdConnectChannelPrograms(deviceAuth,
+                                                   data.get("GuideNumber"),
+                                                   maxTime)
             for chan in chanData:
                 for program in chan["Guide"]:
-                    maxTime = ProcessProgram(xml, program, data.get("GuideName"))
+                    maxTime = ProcessProgram(xml, program,
+                                             data.get("GuideName"))
             counter = counter + 1
 
     except:
@@ -233,7 +227,8 @@ def saveJsonToFile(data, filename):
 def get(url):
     try:
         with urllib.request.urlopen(url) as r:
-            data = json.loads(r.read().decode(r.info().get_param("charset") or "utf-8"))
+            data = json.loads(r.read().decode(r.info().get_param("charset")
+                                              or "utf-8"))
             return data
     except urllib.error.HTTPError as e:
         if e.status != 307 and e.status != 308:
@@ -268,20 +263,15 @@ def GetHdConnectLineUp(lineupUrl):
 
 def GetHdConnectChannels(device_auth):
     WriteLog("Getting Channels.")
-    return get("https://my.hdhomerun.com/api/guide.php?DeviceAuth=%s" % device_auth)
+    return get("https://my.hdhomerun.com/api/guide.php?DeviceAuth=%s" %
+               device_auth)
 
 
 def GetHdConnectChannelPrograms(device_auth, guideNumber, timeStamp):
     WriteLog("Getting Extended Programs")
-    return get(
-        "https://my.hdhomerun.com/api/guide.php?DeviceAuth="
-        + device_auth
-        + "&Channel="
-        + guideNumber
-        + "&Start="
-        + str(timeStamp)
-        + "&SynopsisLength=160"
-    )
+    return get("https://my.hdhomerun.com/api/guide.php?DeviceAuth=" +
+               device_auth + "&Channel=" + guideNumber + "&Start=" +
+               str(timeStamp) + "&SynopsisLength=160")
 
 
 def InList(l, value):
@@ -327,6 +317,24 @@ def WriteLog(message):
 
 
 def main():
+
+    parser = argparse.ArgumentParser(
+        prog="hdhr-xmltv",
+        description="Generates a XMLTV file for HDHomeRun devices",
+        epilog="Thanks for using %(prog)s! :)",
+    )
+
+    parser.add_argument("-o",
+                        "--output-file",
+                        type=argparse.FileType('w'),
+                        default="hdhomerun.xml")
+    parser.add_argument("-v",
+                        "--version",
+                        action="version",
+                        version="%(prog)s 0.1.0")
+
+    args = parser.parse_args()
+
     ClearLog()
     print("Downloading Content...  Please wait.")
     print("Check the log for progress.")
@@ -343,9 +351,7 @@ def main():
     processedChannelList = ["empty", "empty"]
 
     for device in devices:
-
         if "DeviceID" in device:
-
             WriteLog("Processing Device: " + device["DeviceID"])
 
             deviceAuth = GetHdConnectDiscover(device["DiscoverURL"])
@@ -364,7 +370,8 @@ def main():
                         processedChannelList.append(ch)
                         processChannel(xml, chan, deviceAuth)
                     else:
-                        WriteLog("Skipping Channel " + ch + ", already processed.")
+                        WriteLog("Skipping Channel " + ch +
+                                 ", already processed.")
             else:
                 WriteLog("No Lineup for device!")
         else:
@@ -373,7 +380,7 @@ def main():
     reformed_xml = minidom.parseString(ET.tostring(xml))
     xmltv = reformed_xml.toprettyxml(encoding="utf-8")
     WriteLog("Finished compiling information.  Saving...")
-    saveStringToFile(xmltv, "hdhomerun.xml")
+    saveStringToFile(xmltv, args.output_file.name)
     WriteLog("Finished.")
 
 
