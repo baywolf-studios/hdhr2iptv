@@ -1,6 +1,7 @@
 import argparse
 import sys
 import json
+import logging
 import datetime
 import subprocess
 import time
@@ -49,7 +50,7 @@ def get_utc_offset_str():
 
 
 def process_program(xml, program, guideName):
-    write_log("Processing Show: " + program["Title"])
+    logging.info("Processing Show: " + program["Title"])
 
     timezone_offset = get_utc_offset_str().replace(":", "")
     # program
@@ -154,7 +155,7 @@ def process_program(xml, program, guideName):
             # if (filterstringLower == "news" or filterstringLower == "sports"):
             # 	#And the show didn't have it's own episode number...
             # 	if ( addedEpisode == False ):
-            # 		#write_log("-------> Creating Fake Season and Episode for News or Sports show.")
+            # 		#logging.info("-------> Creating Fake Season and Episode for News or Sports show.")
             # 		#add a category for series
             # 		ET.SubElement(xmlProgram, "category",lang="en").text = "series"
             # 		#create a fake episode number for it
@@ -166,8 +167,8 @@ def process_program(xml, program, guideName):
 
 
 def process_channel(xml, data, deviceAuth):
-    write_log("Processing Channel: " + data.get("GuideNumber") + " " +
-              data.get("GuideName"))
+    logging.info("Processing Channel: " + data.get("GuideNumber") + " " +
+                 data.get("GuideName"))
 
     # channel
     xmlChannel = ET.SubElement(xml, "channel", id=data.get("GuideName"))
@@ -206,7 +207,7 @@ def process_channel(xml, data, deviceAuth):
             counter = counter + 1
 
     except:
-        write_log("It appears you do not have the HdHomeRunDvr Service.")
+        logging.info("It appears you do not have the HdHomeRunDvr Service.")
 
 
 def save_string_to_file(strData, filename):
@@ -237,37 +238,37 @@ def http_get_json(url):
 
 
 def get_hdhr_connect_devices():
-    write_log("Getting Connected Devices.")
+    logging.info("Getting Connected Devices.")
     return http_get_json("https://my.hdhomerun.com/discover")
 
 
 def get_hdhr_connect_discover(discover_url):
-    write_log("Discovering...")
+    logging.info("Discovering...")
     data = http_get_json(discover_url)
     device_auth = data["DeviceAuth"]
     return device_auth
 
 
 def get_hdhr_connect_discover_line_up_url(discover_url):
-    write_log("Getting Lineup Url")
+    logging.info("Getting Lineup Url")
     data = http_get_json(discover_url)
     LineupURL = data["LineupURL"]
     return LineupURL
 
 
 def get_hdhr_connect_line_up(lineupUrl):
-    write_log("Getting Lineup")
+    logging.info("Getting Lineup")
     return http_get_json(lineupUrl)
 
 
 def get_hdhr_connect_channels(device_auth):
-    write_log("Getting Channels.")
+    logging.info("Getting Channels.")
     return http_get_json(
         "https://my.hdhomerun.com/api/guide.php?DeviceAuth=%s" % device_auth)
 
 
 def get_hdhr_connect_channel_programs(device_auth, guideNumber, timeStamp):
-    write_log("Getting Extended Programs")
+    logging.info("Getting Extended Programs")
     return http_get_json("https://my.hdhomerun.com/api/guide.php?DeviceAuth=" +
                          device_auth + "&Channel=" + guideNumber + "&Start=" +
                          str(timeStamp) + "&SynopsisLength=160")
@@ -279,13 +280,6 @@ def in_list(l, value):
     else:
         return False
     return False
-
-
-def clear_log():
-    if os.path.exists("HdHomerun.log"):
-        os.remove("HdHomerun.log")
-    if os.path.exists("hdhomerun.xml"):
-        os.remove("hdhomerun.xml")
 
 
 def date_time_to_episode():
@@ -302,17 +296,6 @@ def date_time_to_episode_friendly():
     season = time_now.strftime("%Y")
     episode = time_now.strftime("%m%d%H")
     return "S" + season + "E" + episode
-
-
-def write_log(message):
-    timestamp = time.time()
-    time_now = datetime.fromtimestamp(timestamp)
-    timeString = time_now.strftime("%Y%m%d%H%M%S")
-
-    with open("HdHomerun.log", "ab") as logfile:
-        output = str(timeString) + " " + str(message) + "\n"
-        logfile.write(output.encode("utf-8"))
-    print(output.encode("utf-8"))
 
 
 def main():
@@ -334,22 +317,28 @@ def main():
 
     args = parser.parse_args()
 
-    clear_log()
+    logging.basicConfig(level=logging.INFO,
+                        format="%(asctime)s [%(levelname)s] %(message)s",
+                        handlers=[
+                            logging.FileHandler("hdhr-xmltv.log", mode='w'),
+                            logging.StreamHandler()
+                        ])
+
     print("Downloading Content...  Please wait.")
     print("Check the log for progress.")
-    write_log("Starting...")
+    logging.info("Starting...")
 
     xml = ET.Element("tv")
 
     try:
         devices = get_hdhr_connect_devices()
     except:
-        write_log("No HdHomeRun devices detected.")
+        logging.exception("No HdHomeRun devices detected.")
         exit()
 
     for device in devices:
         if "DeviceID" in device:
-            write_log("Processing Device: " + device["DeviceID"])
+            logging.info("Processing Device: " + device["DeviceID"])
 
             deviceAuth = get_hdhr_connect_discover(device["DiscoverURL"])
 
@@ -359,20 +348,22 @@ def main():
             LineUp = get_hdhr_connect_line_up(lineUpUrl)
 
             if len(LineUp) > 0:
-                write_log("Line Up Exists for device")
+                logging.info("Line Up Exists for device")
                 channels = get_hdhr_connect_channels(deviceAuth)
                 for chan in channels:
                     process_channel(xml, chan, deviceAuth)
             else:
-                write_log("No Lineup for device!")
+                logging.info("No Lineup for device!")
         else:
-            write_log("Must be storage...")
+            logging.info("Must be storage...")
 
     reformed_xml = minidom.parseString(ET.tostring(xml))
     xmltv = reformed_xml.toprettyxml(encoding="utf-8")
-    write_log("Finished compiling information.  Saving...")
+    logging.info("Finished compiling information.  Saving...")
+    if os.path.exists(args.output_file.name):
+        os.remove(args.output_file.name)
     save_string_to_file(xmltv, args.output_file.name)
-    write_log("Finished.")
+    logging.info("Finished.")
 
 
 if __name__ == "__main__":
