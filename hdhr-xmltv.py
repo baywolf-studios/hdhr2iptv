@@ -336,6 +336,8 @@ def main():
         logging.exception("No HdHomeRun devices detected.")
         exit()
 
+    processedChannels = []
+
     for device in devices:
         if "DeviceID" in device:
             logging.info("Processing Device: " + device["DeviceID"])
@@ -350,8 +352,15 @@ def main():
             if len(LineUp) > 0:
                 logging.info("Line Up Exists for device")
                 channels = get_hdhr_connect_channels(deviceAuth)
-                for chan in channels:
-                    process_channel(xml, chan, deviceAuth)
+                for channel in channels:
+                    channelId = channel.get("GuideNumber") + " " + channel.get(
+                        "GuideName")
+                    if channelId in processedChannels:
+                        logging.info("Skipping Channel " + channelId +
+                                     ", already processed.")
+                    else:
+                        process_channel(xml, channel, deviceAuth)
+                        processedChannels.append(channelId)
             else:
                 logging.info("No Lineup for device!")
         else:
