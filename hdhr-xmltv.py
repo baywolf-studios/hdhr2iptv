@@ -166,7 +166,7 @@ def process_program(xml, program, guideName):
     return program["EndTime"]
 
 
-def process_channel(xml, data, deviceAuth):
+def process_channel(xml, data, device_auth):
     logging.info("Processing Channel: " + data.get("GuideNumber") + " " +
                  data.get("GuideName"))
 
@@ -199,7 +199,7 @@ def process_channel(xml, data, deviceAuth):
     try:
         while counter < 24:
             chanData = get_hdhr_connect_channel_programs(
-                deviceAuth, data.get("GuideNumber"), maxTime)
+                device_auth, data.get("GuideNumber"), maxTime)
             for chan in chanData:
                 for program in chan["Guide"]:
                     maxTime = process_program(xml, program,
@@ -336,31 +336,31 @@ def main():
         logging.exception("No HdHomeRun devices detected.")
         exit()
 
-    processedChannels = []
+    processed_channels = []
 
     for device in devices:
         if "DeviceID" in device:
             logging.info("Processing Device: " + device["DeviceID"])
 
-            deviceAuth = get_hdhr_connect_discover(device["DiscoverURL"])
+            device_auth = get_hdhr_connect_discover(device["DiscoverURL"])
 
-            lineUpUrl = get_hdhr_connect_discover_line_up_url(
+            line_up_url = get_hdhr_connect_discover_line_up_url(
                 device["DiscoverURL"])
 
-            LineUp = get_hdhr_connect_line_up(lineUpUrl)
+            LineUp = get_hdhr_connect_line_up(line_up_url)
 
             if len(LineUp) > 0:
                 logging.info("Line Up Exists for device")
-                channels = get_hdhr_connect_channels(deviceAuth)
+                channels = get_hdhr_connect_channels(device_auth)
                 for channel in channels:
-                    channelId = channel.get("GuideNumber") + " " + channel.get(
-                        "GuideName")
-                    if channelId in processedChannels:
-                        logging.info("Skipping Channel " + channelId +
+                    channel_id = channel.get(
+                        "GuideNumber") + " " + channel.get("GuideName")
+                    if channel_id in processed_channels:
+                        logging.info("Skipping Channel " + channel_id +
                                      ", already processed.")
                     else:
-                        process_channel(xml, channel, deviceAuth)
-                        processedChannels.append(channelId)
+                        process_channel(xml, channel, device_auth)
+                        processed_channels.append(channel_id)
             else:
                 logging.info("No Lineup for device!")
         else:
