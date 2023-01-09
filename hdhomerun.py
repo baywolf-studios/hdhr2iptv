@@ -48,8 +48,8 @@ def get_utc_offset_str():
     return utc_offset_str
 
 
-def ProcessProgram(xml, program, guideName):
-    WriteLog("Processing Show: " + program["Title"])
+def process_program(xml, program, guideName):
+    write_log("Processing Show: " + program["Title"])
 
     timezone_offset = get_utc_offset_str().replace(":", "")
     # program
@@ -138,10 +138,10 @@ def ProcessProgram(xml, program, guideName):
             ET.SubElement(xmlProgram, "category", lang="en").text = "series"
             # create a fake episode number for it
             ET.SubElement(xmlProgram, "episode-num",
-                          system="xmltv_ns").text = DateTimeToEpisode()
+                          system="xmltv_ns").text = date_time_to_episode()
             ET.SubElement(
                 xmlProgram, "episode-num",
-                system="onscreen").text = DateTimeToEpisodeFriendly()
+                system="onscreen").text = date_time_to_episode_friendly()
             addedEpisode = True
 
         for filter in program["Filter"]:
@@ -154,20 +154,20 @@ def ProcessProgram(xml, program, guideName):
             # if (filterstringLower == "news" or filterstringLower == "sports"):
             # 	#And the show didn't have it's own episode number...
             # 	if ( addedEpisode == False ):
-            # 		#WriteLog("-------> Creating Fake Season and Episode for News or Sports show.")
+            # 		#write_log("-------> Creating Fake Season and Episode for News or Sports show.")
             # 		#add a category for series
             # 		ET.SubElement(xmlProgram, "category",lang="en").text = "series"
             # 		#create a fake episode number for it
-            # 		ET.SubElement(xmlProgram, "episode-num", system="xmltv_ns").text = DateTimeToEpisode()
-            # 		ET.SubElement(xmlProgram, "episode-num", system="onscreen").text = DateTimeToEpisodeFriendly()
+            # 		ET.SubElement(xmlProgram, "episode-num", system="xmltv_ns").text = date_time_to_episode()
+            # 		ET.SubElement(xmlProgram, "episode-num", system="onscreen").text = date_time_to_episode_friendly()
 
     # Return the endtime so we know where to start from on next loop.
     return program["EndTime"]
 
 
-def processChannel(xml, data, deviceAuth):
-    WriteLog("Processing Channel: " + data.get("GuideNumber") + " " +
-             data.get("GuideName"))
+def process_channel(xml, data, deviceAuth):
+    write_log("Processing Channel: " + data.get("GuideNumber") + " " +
+              data.get("GuideName"))
 
     # channel
     xmlChannel = ET.SubElement(xml, "channel", id=data.get("GuideName"))
@@ -188,7 +188,7 @@ def processChannel(xml, data, deviceAuth):
     maxTime = 0
 
     for program in data.get("Guide"):
-        maxTime = ProcessProgram(xml, program, data.get("GuideName"))
+        maxTime = process_program(xml, program, data.get("GuideName"))
 
     maxTime = maxTime + 1
     counter = 0
@@ -197,34 +197,33 @@ def processChannel(xml, data, deviceAuth):
     # So if we do this 21 times we will have fetched the complete week
     try:
         while counter < 24:
-            chanData = GetHdConnectChannelPrograms(deviceAuth,
-                                                   data.get("GuideNumber"),
-                                                   maxTime)
+            chanData = get_hdhr_connect_channel_programs(
+                deviceAuth, data.get("GuideNumber"), maxTime)
             for chan in chanData:
                 for program in chan["Guide"]:
-                    maxTime = ProcessProgram(xml, program,
-                                             data.get("GuideName"))
+                    maxTime = process_program(xml, program,
+                                              data.get("GuideName"))
             counter = counter + 1
 
     except:
-        WriteLog("It appears you do not have the HdHomeRunDvr Service.")
+        write_log("It appears you do not have the HdHomeRunDvr Service.")
 
 
-def saveStringToFile(strData, filename):
+def save_string_to_file(strData, filename):
     with open(filename, "wb") as outfile:
         outfile.write(strData)
 
 
-def loadJsonFromFile(filename):
+def load_json_from_file(filename):
     return json.load(open(filename))
 
 
-def saveJsonToFile(data, filename):
+def save_json_to_file(data, filename):
     with open(filename, "w") as outfile:
         json.dump(data, outfile, indent=4)
 
 
-def get(url):
+def http_get_json(url):
     try:
         with urllib.request.urlopen(url) as r:
             data = json.loads(r.read().decode(r.info().get_param("charset")
@@ -237,44 +236,44 @@ def get(url):
         return get(redirected_url)
 
 
-def GetHdConnectDevices():
-    WriteLog("Getting Connected Devices.")
-    return get("https://my.hdhomerun.com/discover")
+def get_hdhr_connect_devices():
+    write_log("Getting Connected Devices.")
+    return http_get_json("https://my.hdhomerun.com/discover")
 
 
-def GetHdConnectDiscover(discover_url):
-    WriteLog("Discovering...")
-    data = get(discover_url)
+def get_hdhr_connect_discover(discover_url):
+    write_log("Discovering...")
+    data = http_get_json(discover_url)
     device_auth = data["DeviceAuth"]
     return device_auth
 
 
-def GetHdConnectDiscoverLineUpUrl(discover_url):
-    WriteLog("Getting Lineup Url")
-    data = get(discover_url)
+def get_hdhr_connect_discover_line_up_url(discover_url):
+    write_log("Getting Lineup Url")
+    data = http_get_json(discover_url)
     LineupURL = data["LineupURL"]
     return LineupURL
 
 
-def GetHdConnectLineUp(lineupUrl):
-    WriteLog("Getting Lineup")
-    return get(lineupUrl)
+def get_hdhr_connect_line_up(lineupUrl):
+    write_log("Getting Lineup")
+    return http_get_json(lineupUrl)
 
 
-def GetHdConnectChannels(device_auth):
-    WriteLog("Getting Channels.")
-    return get("https://my.hdhomerun.com/api/guide.php?DeviceAuth=%s" %
-               device_auth)
+def get_hdhr_connect_channels(device_auth):
+    write_log("Getting Channels.")
+    return http_get_json(
+        "https://my.hdhomerun.com/api/guide.php?DeviceAuth=%s" % device_auth)
 
 
-def GetHdConnectChannelPrograms(device_auth, guideNumber, timeStamp):
-    WriteLog("Getting Extended Programs")
-    return get("https://my.hdhomerun.com/api/guide.php?DeviceAuth=" +
-               device_auth + "&Channel=" + guideNumber + "&Start=" +
-               str(timeStamp) + "&SynopsisLength=160")
+def get_hdhr_connect_channel_programs(device_auth, guideNumber, timeStamp):
+    write_log("Getting Extended Programs")
+    return http_get_json("https://my.hdhomerun.com/api/guide.php?DeviceAuth=" +
+                         device_auth + "&Channel=" + guideNumber + "&Start=" +
+                         str(timeStamp) + "&SynopsisLength=160")
 
 
-def InList(l, value):
+def in_list(l, value):
     if l.count(value) > 0:
         return True
     else:
@@ -282,14 +281,14 @@ def InList(l, value):
     return False
 
 
-def ClearLog():
+def clear_log():
     if os.path.exists("HdHomerun.log"):
         os.remove("HdHomerun.log")
     if os.path.exists("hdhomerun.xml"):
         os.remove("hdhomerun.xml")
 
 
-def DateTimeToEpisode():
+def date_time_to_episode():
     timestamp = time.time()
     time_now = datetime.fromtimestamp(timestamp)
     season = time_now.strftime("%Y")
@@ -297,7 +296,7 @@ def DateTimeToEpisode():
     return season + " . " + episode + " . 0/1"
 
 
-def DateTimeToEpisodeFriendly():
+def date_time_to_episode_friendly():
     timestamp = time.time()
     time_now = datetime.fromtimestamp(timestamp)
     season = time_now.strftime("%Y")
@@ -305,7 +304,7 @@ def DateTimeToEpisodeFriendly():
     return "S" + season + "E" + episode
 
 
-def WriteLog(message):
+def write_log(message):
     timestamp = time.time()
     time_now = datetime.fromtimestamp(timestamp)
     timeString = time_now.strftime("%Y%m%d%H%M%S")
@@ -335,53 +334,54 @@ def main():
 
     args = parser.parse_args()
 
-    ClearLog()
+    clear_log()
     print("Downloading Content...  Please wait.")
     print("Check the log for progress.")
-    WriteLog("Starting...")
+    write_log("Starting...")
 
     xml = ET.Element("tv")
 
     try:
-        devices = GetHdConnectDevices()
+        devices = get_hdhr_connect_devices()
     except:
-        WriteLog("No HdHomeRun devices detected.")
+        write_log("No HdHomeRun devices detected.")
         exit()
 
     processedChannelList = ["empty", "empty"]
 
     for device in devices:
         if "DeviceID" in device:
-            WriteLog("Processing Device: " + device["DeviceID"])
+            write_log("Processing Device: " + device["DeviceID"])
 
-            deviceAuth = GetHdConnectDiscover(device["DiscoverURL"])
+            deviceAuth = get_hdhr_connect_discover(device["DiscoverURL"])
 
-            lineUpUrl = GetHdConnectDiscoverLineUpUrl(device["DiscoverURL"])
+            lineUpUrl = get_hdhr_connect_discover_line_up_url(
+                device["DiscoverURL"])
 
-            LineUp = GetHdConnectLineUp(lineUpUrl)
+            LineUp = get_hdhr_connect_line_up(lineUpUrl)
 
             if len(LineUp) > 0:
-                WriteLog("Line Up Exists for device")
-                channels = GetHdConnectChannels(deviceAuth)
+                write_log("Line Up Exists for device")
+                channels = get_hdhr_connect_channels(deviceAuth)
                 for chan in channels:
                     ch = str(chan.get("GuideNumber"))
-                    if InList(processedChannelList, ch) == False:
-                        WriteLog("Processing Channel: " + ch)
+                    if in_list(processedChannelList, ch) == False:
+                        write_log("Processing Channel: " + ch)
                         processedChannelList.append(ch)
-                        processChannel(xml, chan, deviceAuth)
+                        process_channel(xml, chan, deviceAuth)
                     else:
-                        WriteLog("Skipping Channel " + ch +
-                                 ", already processed.")
+                        write_log("Skipping Channel " + ch +
+                                  ", already processed.")
             else:
-                WriteLog("No Lineup for device!")
+                write_log("No Lineup for device!")
         else:
-            WriteLog("Must be storage...")
+            write_log("Must be storage...")
 
     reformed_xml = minidom.parseString(ET.tostring(xml))
     xmltv = reformed_xml.toprettyxml(encoding="utf-8")
-    WriteLog("Finished compiling information.  Saving...")
-    saveStringToFile(xmltv, args.output_file.name)
-    WriteLog("Finished.")
+    write_log("Finished compiling information.  Saving...")
+    save_string_to_file(xmltv, args.output_file.name)
+    write_log("Finished.")
 
 
 if __name__ == "__main__":
