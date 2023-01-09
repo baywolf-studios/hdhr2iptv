@@ -233,7 +233,7 @@ def http_get_json(url):
         if e.status != 307 and e.status != 308:
             raise
         redirected_url = urllib.parse.urljoin(url, e.headers["Location"])
-        return get(redirected_url)
+        return http_get_json(redirected_url)
 
 
 def get_hdhr_connect_devices():
@@ -347,8 +347,6 @@ def main():
         write_log("No HdHomeRun devices detected.")
         exit()
 
-    processedChannelList = ["empty", "empty"]
-
     for device in devices:
         if "DeviceID" in device:
             write_log("Processing Device: " + device["DeviceID"])
@@ -364,14 +362,7 @@ def main():
                 write_log("Line Up Exists for device")
                 channels = get_hdhr_connect_channels(deviceAuth)
                 for chan in channels:
-                    ch = str(chan.get("GuideNumber"))
-                    if in_list(processedChannelList, ch) == False:
-                        write_log("Processing Channel: " + ch)
-                        processedChannelList.append(ch)
-                        process_channel(xml, chan, deviceAuth)
-                    else:
-                        write_log("Skipping Channel " + ch +
-                                  ", already processed.")
+                    process_channel(xml, chan, deviceAuth)
             else:
                 write_log("No Lineup for device!")
         else:
