@@ -27,91 +27,110 @@ def get_utc_offset_str():
     utc_offset_secs = (time_now - time_utc).total_seconds()
 
     # Flag variable to hold if the current time is behind UTC.
-    is_behind_utc = False
+    is_behind_utc = utc_offset_secs < 0
 
     # If the current time is behind UTC convert the offset
     # seconds to a positive value and set the flag variable.
-    if utc_offset_secs < 0:
-        is_behind_utc = True
-        utc_offset_secs *= -1
-
-    # Build a UTC offset string suitable for use in a timestamp.
-
     if is_behind_utc:
+        utc_offset_secs *= -1
         pos_neg_prefix = "-"
     else:
         pos_neg_prefix = "+"
 
     utc_offset = time.gmtime(utc_offset_secs)
-    utc_offset_fmt = time.strftime("%H:%M", utc_offset)
+    utc_offset_fmt = time.strftime("%H%M", utc_offset)
     utc_offset_str = pos_neg_prefix + utc_offset_fmt
 
     return utc_offset_str
 
 
-def process_program(xml, program, guideName):
-    logging.info("Processing Show: " + program["Title"])
+def parse_channel(xml_root, channel):
+    channel_number = channel.get("GuideNumber")
 
-    timezone_offset = get_utc_offset_str().replace(":", "")
-    # program
+    logging.info(f"Parsing Channel: {channel_number}")
+
+    # channel
+    xml_channel = ET.SubElement(xml_root, "channel", id=channel_number)
+
+    # display name
+    ET.SubElement(xml_channel, "display-name").text = channel_number
+
+    # display name
+    ET.SubElement(xml_channel, "display-name").text = channel.get("GuideName")
+
+    if "Affiliate" in channel:
+        ET.SubElement(xml_channel,
+                      "display-name").text = channel.get("Affiliate")
+
+    if "ImageURL" in channel:
+        ET.SubElement(xml_channel, "icon", src=channel.get("ImageURL"))
+
+    return xml_channel
+
+
+def parse_program(xml_root, program, channel_number):
+    title = program["Title"]
+    logging.info(f"Parsing Channel: {channel_number} Program: {title}")
+
+    timezone_offset = get_utc_offset_str()
+
     # Create the "programme" element and set the Channel attribute to "GuideName" from json
-    xmlProgram = ET.SubElement(xml, "programme", channel=guideName)
-    # 	 channel=channel['GuideName'])
+    xml_program = ET.SubElement(xml_root, "programme", channel=channel_number)
 
     # set the start date and time from the feed
-    xmlProgram.set(
+    xml_program.set(
         "start",
         datetime.fromtimestamp(program["StartTime"]).strftime("%Y%m%d%H%M%S") +
         " " + timezone_offset,
     )
 
     # set the end date and time from the feed
-    xmlProgram.set(
+    xml_program.set(
         "stop",
         datetime.fromtimestamp(program["EndTime"]).strftime("%Y%m%d%H%M%S") +
         " " + timezone_offset,
     )
 
     # Title
-    ET.SubElement(xmlProgram, "title", lang="en").text = program["Title"]
+    ET.SubElement(xml_program, "title", lang="en").text = title
 
     # Sub Title
     if "EpisodeTitle" in program:
-        ET.SubElement(xmlProgram, "sub-title",
+        ET.SubElement(xml_program, "sub-title",
                       lang="en").text = program["EpisodeTitle"]
 
     # Description
     if "Synopsis" in program:
-        ET.SubElement(xmlProgram, "desc").text = program["Synopsis"]
+        ET.SubElement(xml_program, "desc").text = program["Synopsis"]
 
     # Credits
     # We add a blank entry to satisfy Plex
-    ET.SubElement(xmlProgram, "credits").text = ""
+    ET.SubElement(xml_program, "credits").text = ""
 
     addedEpisode = False
 
     if "EpisodeNumber" in program:
         # add the friendly display
-        ET.SubElement(xmlProgram, "episode-num",
+        ET.SubElement(xml_program, "episode-num",
                       system="onscreen").text = program["EpisodeNumber"]
         # Fake the xml version
         en = program["EpisodeNumber"]
         parts = en.split("E")
-        season = parts[0].replace("S", "")
-        episode = parts[1]
+        season = int(parts[0].replace("S", "")) - 1
+        episode = int(parts[1]) - 1
         # Assign the fake xml version
-        ET.SubElement(xmlProgram, "episode-num",
-                      system="xmltv_ns").text = (season + " . " + episode +
-                                                 " . 0/1")
+        ET.SubElement(xml_program, "episode-num",
+                      system="xmltv_ns").text = (str(season) + " . " +
+                                                 str(episode) + " . 0/1")
         # set the category flag to series
-        ET.SubElement(xmlProgram, "category", lang="en").text = "series"
+        ET.SubElement(xml_program, "category", lang="en").text = "series"
         addedEpisode = True
 
     if "OriginalAirdate" in program:
         if program["OriginalAirdate"] > 0:
             # The 86400 is because the HdHomeRun feed is off by a day, this fixes that.
             ET.SubElement(
-                xmlProgram,
+                xml_program,
                 "previously-shown",
                 start=datetime.fromtimestamp(program["OriginalAirdate"] +
                                              86400).strftime("%Y%m%d%H%M%S") +
@@ -119,11 +138,11 @@ def process_program(xml, program, guideName):
             )
 
     if "ImageURL" in program:
-        ET.SubElement(xmlProgram, "icon", src=program["ImageURL"])
+        ET.SubElement(xml_program, "icon", src=program["ImageURL"])
 
-    xmlAudio = ET.SubElement(xmlProgram, "audio")
+    xmlAudio = ET.SubElement(xml_program, "audio")
     ET.SubElement(xmlAudio, "stereo").text = "stereo"
-    ET.SubElement(xmlProgram, "subtitles", type="teletext")
+    ET.SubElement(xml_program, "subtitles", type="teletext")
 
     if "Filter" in program:
         # Search the filters and see if it is a movie
@@ -136,12 +155,12 @@ def process_program(xml, program, guideName):
 
         # If we didn't find the movie category, and we haven't added an episode flag, lets do it!
         if FoundMovieCategory == False and addedEpisode == False:
-            ET.SubElement(xmlProgram, "category", lang="en").text = "series"
+            ET.SubElement(xml_program, "category", lang="en").text = "series"
             # create a fake episode number for it
-            ET.SubElement(xmlProgram, "episode-num",
+            ET.SubElement(xml_program, "episode-num",
                           system="xmltv_ns").text = date_time_to_episode()
             ET.SubElement(
-                xmlProgram, "episode-num",
+                xml_program, "episode-num",
                 system="onscreen").text = date_time_to_episode_friendly()
             addedEpisode = True
 
@@ -149,7 +168,7 @@ def process_program(xml, program, guideName):
             # Lowercase the filter... apearenttly Plex is case sensitive
             filterstringLower = str(filter).lower()
             # add the filter as a category
-            ET.SubElement(xmlProgram, "category",
+            ET.SubElement(xml_program, "category",
                           lang="en").text = filterstringLower
             # If the filter is news or sports...
             # if (filterstringLower == "news" or filterstringLower == "sports"):
@@ -157,71 +176,18 @@ def process_program(xml, program, guideName):
             # 	if ( addedEpisode == False ):
             # 		#logging.info("-------> Creating Fake Season and Episode for News or Sports show.")
             # 		#add a category for series
-            # 		ET.SubElement(xmlProgram, "category",lang="en").text = "series"
+            # 		ET.SubElement(xml_program, "category",lang="en").text = "series"
             # 		#create a fake episode number for it
-            # 		ET.SubElement(xmlProgram, "episode-num", system="xmltv_ns").text = date_time_to_episode()
-            # 		ET.SubElement(xmlProgram, "episode-num", system="onscreen").text = date_time_to_episode_friendly()
+            # 		ET.SubElement(xml_program, "episode-num", system="xmltv_ns").text = date_time_to_episode()
+            # 		ET.SubElement(xml_program, "episode-num", system="onscreen").text = date_time_to_episode_friendly()
 
     # Return the endtime so we know where to start from on next loop.
     return program["EndTime"]
 
 
-def process_channel(xml, data, device_auth):
-    logging.info("Processing Channel: " + data.get("GuideNumber") + " " +
-                 data.get("GuideName"))
-
-    # channel
-    xmlChannel = ET.SubElement(xml, "channel", id=data.get("GuideName"))
-
-    # display name
-    ET.SubElement(xmlChannel, "display-name").text = data.get("GuideName")
-
-    # display name
-    ET.SubElement(xmlChannel, "display-name").text = data.get("GuideNumber")
-
-    # display name
-    if "Affiliate" in data:
-        ET.SubElement(xmlChannel, "display-name").text = data.get("Affiliate")
-
-    if "ImageURL" in data:
-        ET.SubElement(xmlChannel, "icon", src=data.get("ImageURL"))
-
-    maxTime = 0
-
-    for program in data.get("Guide"):
-        maxTime = process_program(xml, program, data.get("GuideName"))
-
-    maxTime = maxTime + 1
-    counter = 0
-
-    # The first pull is for 4 hours, each of these are 8 hours
-    # So if we do this 21 times we will have fetched the complete week
-    try:
-        while counter < 24:
-            chanData = get_hdhr_connect_channel_programs(
-                device_auth, data.get("GuideNumber"), maxTime)
-            for chan in chanData:
-                for program in chan["Guide"]:
-                    maxTime = process_program(xml, program,
-                                              data.get("GuideName"))
-            counter = counter + 1
-
-    except:
-        logging.info("It appears you do not have the HdHomeRunDvr Service.")
-
-
 def save_string_to_file(strData, filename):
     with open(filename, "wb") as outfile:
         outfile.write(strData)
-
-
-def load_json_from_file(filename):
-    return json.load(open(filename))
-
-
-def save_json_to_file(data, filename):
-    with open(filename, "w") as outfile:
-        json.dump(data, outfile, indent=4)
 
 
 def http_get_json(url):
@@ -237,49 +203,29 @@ def http_get_json(url):
         return http_get_json(redirected_url)
 
 
-def get_hdhr_connect_devices():
+def get_hdhr_devices():
     logging.info("Getting Connected Devices.")
     return http_get_json("https://my.hdhomerun.com/discover")
 
 
-def get_hdhr_connect_discover(discover_url):
+def get_hdhr_device_auth(discover_url):
     logging.info("Discovering...")
     data = http_get_json(discover_url)
     device_auth = data["DeviceAuth"]
     return device_auth
 
 
-def get_hdhr_connect_discover_line_up_url(discover_url):
-    logging.info("Getting Lineup Url")
-    data = http_get_json(discover_url)
-    LineupURL = data["LineupURL"]
-    return LineupURL
-
-
-def get_hdhr_connect_line_up(lineupUrl):
+def get_hdhr_lineup(lineupUrl):
     logging.info("Getting Lineup")
     return http_get_json(lineupUrl)
 
 
-def get_hdhr_connect_channels(device_auth):
-    logging.info("Getting Channels.")
-    return http_get_json(
-        "https://my.hdhomerun.com/api/guide.php?DeviceAuth=%s" % device_auth)
-
-
-def get_hdhr_connect_channel_programs(device_auth, guideNumber, timeStamp):
-    logging.info("Getting Extended Programs")
-    return http_get_json("https://my.hdhomerun.com/api/guide.php?DeviceAuth=" +
-                         device_auth + "&Channel=" + guideNumber + "&Start=" +
-                         str(timeStamp) + "&SynopsisLength=160")
-
-
-def in_list(l, value):
-    if l.count(value) > 0:
-        return True
-    else:
-        return False
-    return False
+def get_hdhr_channel_guide(device_auth, channel_number, start_time=None):
+    logging.info("Getting Channel Guide")
+    url = "https://my.hdhomerun.com/api/guide.php?DeviceAuth=" + device_auth + "&Channel=" + channel_number
+    if start_time is not None:
+        url = url + "&Start=" + str(start_time)
+    return http_get_json(url)
 
 
 def date_time_to_episode():
@@ -298,6 +244,76 @@ def date_time_to_episode_friendly():
     return "S" + season + "E" + episode
 
 
+def generate_xmltv(output_file):
+    logging.info("Generating XMLTV.")
+    xml_root = ET.Element("tv")
+
+    devices = get_hdhr_devices()
+
+    if devices is not None:
+        parsed_channels = []
+
+        for device in devices:
+            if "DeviceID" in device:
+                device_id = device["DeviceID"]
+                discover_url = device["DiscoverURL"]
+                lineup_url = device["LineupURL"]
+
+                logging.info(f"Processing Device: {device_id}")
+
+                device_auth = get_hdhr_device_auth(discover_url)
+
+                lineup = get_hdhr_lineup(lineup_url)
+
+                if lineup is not None:
+                    logging.info(f"Lineup exists for device: {device_id}")
+                    for channel in lineup:
+                        channel_number = channel.get("GuideNumber")
+                        if channel_number not in parsed_channels:
+                            channel_guide = get_hdhr_channel_guide(
+                                device_auth, channel_number)
+                            channel_data = next(iter(channel_guide or []),
+                                                None)
+                            if channel_data is not None:
+                                parse_channel(xml_root, channel_data)
+
+                                guide_data = channel_data["Guide"]
+                                while guide_data is not None:
+                                    last_end_time = 0
+                                    for program in guide_data:
+                                        last_end_time = parse_program(
+                                            xml_root, program, channel_number)
+                                    next_start_time = last_end_time + 1
+                                    channel_guide = get_hdhr_channel_guide(
+                                        device_auth, channel_number,
+                                        next_start_time)
+                                    channel_data = next(
+                                        iter(channel_guide or []), None)
+                                    if channel_data is not None:
+                                        guide_data = channel_data["Guide"]
+                                    else:
+                                        guide_data = None
+                            else:
+                                logging.info(
+                                    f"No guide for channel: {channel_number}")
+                            parsed_channels.append(channel_number)
+                        else:
+                            logging.info(f"Skipping channel: " +
+                                         channel_number)
+                else:
+                    logging.info(f"No lineup for device: {device_id}")
+            else:
+                logging.info("No DeviceID")
+
+        reformed_xml = minidom.parseString(ET.tostring(xml_root))
+        xmltv = reformed_xml.toprettyxml(encoding="utf-8")
+        logging.info("Finished parsing information")
+        save_string_to_file(xmltv, output_file)
+        logging.info("Saved XMLTV")
+    else:
+        logging.warning("No HdHomeRun devices detected")
+
+
 def main():
 
     parser = argparse.ArgumentParser(
@@ -306,10 +322,15 @@ def main():
         epilog="Thanks for using %(prog)s! :)",
     )
 
+    parser.add_argument("-l",
+                        "--log-file",
+                        type=argparse.FileType('w'),
+                        default="hdhr-xmltv.log")
     parser.add_argument("-o",
                         "--output-file",
                         type=argparse.FileType('w'),
-                        default="hdhomerun.xml")
+                        default="xmltv.xml")
+    parser.add_argument("-s", "--sleep-time", type=int)
     parser.add_argument("-v",
                         "--version",
                         action="version",
@@ -320,59 +341,20 @@ def main():
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s [%(levelname)s] %(message)s",
                         handlers=[
-                            logging.FileHandler("hdhr-xmltv.log", mode='w'),
+                            logging.FileHandler(args.log_file.name, mode='w'),
                             logging.StreamHandler()
                         ])
 
-    print("Downloading Content...  Please wait.")
-    print("Check the log for progress.")
-    logging.info("Starting...")
-
-    xml = ET.Element("tv")
-
     try:
-        devices = get_hdhr_connect_devices()
-    except:
-        logging.exception("No HdHomeRun devices detected.")
-        exit()
-
-    processed_channels = []
-
-    for device in devices:
-        if "DeviceID" in device:
-            logging.info("Processing Device: " + device["DeviceID"])
-
-            device_auth = get_hdhr_connect_discover(device["DiscoverURL"])
-
-            line_up_url = get_hdhr_connect_discover_line_up_url(
-                device["DiscoverURL"])
-
-            LineUp = get_hdhr_connect_line_up(line_up_url)
-
-            if len(LineUp) > 0:
-                logging.info("Line Up Exists for device")
-                channels = get_hdhr_connect_channels(device_auth)
-                for channel in channels:
-                    channel_id = channel.get(
-                        "GuideNumber") + " " + channel.get("GuideName")
-                    if channel_id in processed_channels:
-                        logging.info("Skipping Channel " + channel_id +
-                                     ", already processed.")
-                    else:
-                        process_channel(xml, channel, device_auth)
-                        processed_channels.append(channel_id)
-            else:
-                logging.info("No Lineup for device!")
+        if args.sleep_time is None:
+            generate_xmltv(args.output_file.name)
         else:
-            logging.info("Must be storage...")
-
-    reformed_xml = minidom.parseString(ET.tostring(xml))
-    xmltv = reformed_xml.toprettyxml(encoding="utf-8")
-    logging.info("Finished compiling information.  Saving...")
-    if os.path.exists(args.output_file.name):
-        os.remove(args.output_file.name)
-    save_string_to_file(xmltv, args.output_file.name)
-    logging.info("Finished.")
+            while True:
+                generate_xmltv(args.output_file.name)
+                logging.info(f"Sleeping for {args.sleep_time} seconds")
+                sleep(args.sleep_time)
+    except:
+        logging.exception("Unhandled exception occurred.")
 
 
 if __name__ == "__main__":
