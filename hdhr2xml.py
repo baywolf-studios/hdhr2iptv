@@ -3,6 +3,7 @@ import datetime
 import json
 import logging
 import sys
+import time
 import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, timezone
@@ -255,10 +256,6 @@ def main():
                         type=argparse.FileType('w'),
                         default="hdhr2xml.log",
                         help="output log filename")
-    parser.add_argument("-f",
-                        "--favorites-only",
-                        action='store_true',
-                        help="only retrieve epg for favorite channels")
     parser.add_argument("-o",
                         "--output-file",
                         type=argparse.FileType('w'),
@@ -267,7 +264,11 @@ def main():
     parser.add_argument("-s",
                         "--sleep-time",
                         type=int,
-                        "number of seconds to sleep before looping")
+                        help="number of seconds to sleep before looping")
+    parser.add_argument("-f",
+                        "--favorites-only",
+                        action='store_true',
+                        help="only retrieve epg for favorite channels")
     parser.add_argument("-v",
                         "--version",
                         action="version",
@@ -287,9 +288,9 @@ def main():
             generate_xmltv(args.output_file.name, args.favorites_only)
         else:
             while True:
-                generate_xmltv(args.output_file.name)
+                generate_xmltv(args.output_file.name, args.favorites_only)
                 logging.info(f"Sleeping for {args.sleep_time} seconds")
-                sleep(args.sleep_time)
+                time.sleep(args.sleep_time)
     except:
         logging.exception("Unhandled exception occurred.")
 
