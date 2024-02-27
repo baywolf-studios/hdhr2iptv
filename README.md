@@ -1,24 +1,23 @@
-# hdhr2xml
-Generates a XMLTV file for HDHomeRun devices
+# hdhr2iptv
+Generates M3U files and a XMLTV file for HDHomeRun devices
 
 ## Help
 ```
-usage: hdhr2xml [-h] [-l LOG_FILE] [-o OUTPUT_FILE] [-s SLEEP_TIME] [-f] [-v]
+usage: hdhr2iptv [-h] [-l LOG_FILE] [-s RUN_DAILY_HOUR] [-o OUTPUT_DIRECTORY] [-v]
 
-Generates a XMLTV file for HDHomeRun devices
+Generates M3U files and a XMLTV file for HDHomeRun devices
 
 options:
   -h, --help            show this help message and exit
   -l LOG_FILE, --log-file LOG_FILE
                         output log filename
-  -o OUTPUT_FILE, --output-file OUTPUT_FILE
-                        output xml filename
-  -s SLEEP_TIME, --sleep-time SLEEP_TIME
-                        number of seconds to sleep before looping
-  -f, --favorites-only  only retrieve epg for favorite channels
+  -s RUN_DAILY_HOUR, --run-daily-hour RUN_DAILY_HOUR
+                        will loop and run daily at this hour
+  -o OUTPUT_DIRECTORY, --output-directory OUTPUT_DIRECTORY
+                        output directory for m3u and xml
   -v, --version         show program's version number and exit
 
-Thanks for using hdhr2xml! :)
+Thanks for using hdhr2iptv! :)
 ```
 
 ## Usage
@@ -28,33 +27,27 @@ Here are some example snippets to help you get started creating a container.
 ### docker-compose
 ```yaml
 services:
-  hdhr2xml:
-    command:
-    - python
-    - /hdhr2xml/hdhr2xml.py
-    - --output-file=/hdhr2xml/xmltv.xml
-    - --log-file=/hdhr2xml/hdhr2xml.log
-    - --sleep-time=3600
-    - --favorites-only
+  hdhr2iptv:
+    working-dir: /hdhr2iptv
+    command: python hdhr2iptv.py --run-daily-hour 1
     image: python:3
     restart: unless-stopped
     volumes:
     - /etc/timezone:/etc/timezone:ro
     - /etc/localtime:/etc/localtime:ro
-    - /path/to/hdhr2xml:/hdhr2xml:rw
+    - /path/to/hdhr2iptv:/hdhr2iptv:rw
 version: '3.9'
 ```
 
 ### docker cli
 ```bash
 docker run -d \
+  --net=host \
   -v /etc/timezone:/etc/timezone:ro \
   -v /etc/localtime:/etc/localtime:ro \
-  -v /path/to/hdhr2xml:/hdhr2xml:rw \
+  -v /path/to/hdhr2iptv:/hdhr2iptv:rw \
   --restart unless-stopped \
-  python:3 python /hdhr2xml/hdhr2xml.py \
-  --output-file=/hdhr2xml/xmltv.xml \
-  --log-file=/hdhr2xml/hdhr2xml.log \
-  --sleep-time=3600 \
-  --favorites-only 
+  --workdir /hdhr2iptv \
+  python:3 python /hdhr2iptv/hdhr2iptv.py \
+  --run-daily-hour 1
 ```
