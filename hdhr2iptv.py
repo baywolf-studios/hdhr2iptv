@@ -278,7 +278,7 @@ def main():
         default=os.path.curdir,
         help="output directory for m3u and xml",
     )
-    parser.add_argument("-v", "--version", action="version", version="%(prog)s 1.0.0")
+    parser.add_argument("-v", "--version", action="version", version="%(prog)s 2.0.0")
 
     args = parser.parse_args()
 
