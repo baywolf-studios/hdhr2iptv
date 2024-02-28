@@ -144,8 +144,9 @@ def parse_channel(xml_root, channel):
     return xml_channel
 
 
-def http_get_json(url):
+def http_get_json(url, throttle_delay=1):
     try:
+        time.sleep(throttle_delay)
         with urllib.request.urlopen(url) as r:
             data = json.loads(r.read().decode(r.info().get_param("charset") or "utf-8"))
             return data
@@ -219,7 +220,9 @@ def generate_xmltv(output_directory):
                                             f"https://my.hdhomerun.com/api/guide.php?DeviceAuth={device_auth}&Channel={channel_number}&Start={next_start_time}"
                                         )
 
-                                        channel_data = next(iter(channel_guide or []), None)
+                                        channel_data = next(
+                                            iter(channel_guide or []), None
+                                        )
 
                                         if channel_data is not None:
                                             guide_data = channel_data["Guide"]
@@ -229,7 +232,9 @@ def generate_xmltv(output_directory):
                                             )
                                             guide_data = None
                                 else:
-                                    logging.info(f"No guide for channel: {channel_number}")
+                                    logging.info(
+                                        f"No guide for channel: {channel_number}"
+                                    )
                                 parsed_channels.append(channel_number)
                             else:
                                 logging.info(f"Skipping channel: {channel_number}")
