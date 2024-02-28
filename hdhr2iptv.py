@@ -157,6 +157,34 @@ def http_get_json(url, throttle_delay=1):
         return http_get_json(redirected_url)
 
 
+def generate_m3u(output_directory, device_id, lineup):
+    logging.info(f"Generating M3U for {device_id}")
+    newline = "\r\n"
+    m3u_data = "#EXTM3U"
+    for channel in lineup:
+        channel_number = channel.get("GuideNumber")
+        channel_name = channel.get("GuideName")
+        channel_url = channel.get("URL")
+        channel_favorite = channel.get("Favorite")
+        channel_hd = channel.get("HD")
+
+        m3u_data += newline
+        m3u_data += f'#EXTINF:-1 channel-id="{channel_number}" channel-number="{channel_number}" tvg-id="{channel_number}" tvg-name="{channel_name}" tvg-chno="{channel_number}",{channel_name}'
+        if channel_favorite:
+            m3u_data += newline
+            m3u_data += "#EXTGRP:Favorites"
+            if channel_hd:
+                m3u_data += ";HD"
+        elif channel_hd:
+            m3u_data += newline
+            m3u_data += "#EXTGRP:HD"
+        m3u_data += newline
+        m3u_data += channel_url
+    m3u_data += newline
+    with open(os.path.join(output_directory, f"{device_id}.m3u"), "w") as m3u_file:
+        m3u_file.write(m3u_data)
+
+
 def generate_xmltv(output_directory):
     logging.info("Getting HDHomeRun Devices")
     try:
@@ -180,11 +208,7 @@ def generate_xmltv(output_directory):
                     logging.info("Getting HDHomeRun Lineup")
                     lineup = http_get_json(lineup_url)
 
-                    logging.info("Saving HDHomeRun Lineup M3U")
-                    urllib.request.urlretrieve(
-                        lineup_url.replace("lineup.json", "lineup.m3u"),
-                        os.path.join(output_directory, f"{device_id}.m3u"),
-                    )
+                    generate_m3u(output_directory, device_id, lineup)
 
                     if lineup is not None:
                         logging.info(f"Lineup exists for device: {device_id}")
