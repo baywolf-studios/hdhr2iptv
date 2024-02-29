@@ -164,3 +164,4 @@ cython_debug/
 *.m3u
 *.xml
 *.dylib
+*.json

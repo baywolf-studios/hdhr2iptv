@@ -1,40 +1,14 @@
 import argparse
 import datetime
-import json
 import logging
 import os
 import sys
-import time
-import urllib.request
 import xml.etree.ElementTree as ET
-from datetime import date, datetime, timezone, timedelta
+from datetime import date, datetime, timezone
+from logging.handlers import TimedRotatingFileHandler
+
 from libhdhr import get_hdhr_devices
-
-LOCAL_TIMEZONE = datetime.now(timezone.utc).astimezone().tzinfo
-
-
-def sleep_until_hour(hour):
-    today = datetime.today()
-    future = datetime(today.year, today.month, today.day, hour, 0)
-    if today.timestamp() > future.timestamp():
-        future += timedelta(days=1)
-
-    logging.info(f"Sleeping until: {future}")
-    time.sleep((future - today).total_seconds())
-
-
-def directory(raw_path):
-    if not os.path.isdir(raw_path):
-        raise argparse.ArgumentTypeError(
-            '"{}" is not an existing directory'.format(raw_path)
-        )
-    return os.path.abspath(raw_path)
-
-
-def timestamp_to_xmltv_datetime(timestamp):
-    return datetime.fromtimestamp(timestamp, tz=LOCAL_TIMEZONE).strftime(
-        "%Y%m%d%H%M%S %z"
-    )
+import utils
 
 
 def parse_program(xml_root, program, channel_number):
@@ -43,9 +17,13 @@ def parse_program(xml_root, program, channel_number):
 
     xml_program = ET.SubElement(xml_root, "programme", channel=channel_number)
 
-    xml_program.set("start", timestamp_to_xmltv_datetime(program["StartTime"]))
+    xml_program.set(
+        "start", utils.convert_timestamp_to_xmltv_datetime(program["StartTime"])
+    )
 
-    xml_program.set("stop", timestamp_to_xmltv_datetime(program["EndTime"]))
+    xml_program.set(
+        "stop", utils.convert_timestamp_to_xmltv_datetime(program["EndTime"])
+    )
 
     ET.SubElement(xml_program, "title", lang="en").text = title
 
@@ -144,23 +122,40 @@ def parse_channel(xml_root, channel):
     return xml_channel
 
 
-def http_get_json(url, throttle_delay=1):
-    try:
-        time.sleep(throttle_delay)
-        with urllib.request.urlopen(url) as r:
-            data = json.loads(r.read().decode(r.info().get_param("charset") or "utf-8"))
-            return data
-    except urllib.error.HTTPError as e:
-        if e.status != 307 and e.status != 308:
-            raise
-        redirected_url = urllib.parse.urljoin(url, e.headers["Location"])
-        return http_get_json(redirected_url)
+def get_hdhr_channel_guide(device_auth, channel_number, start_time=None):
+    logging.info(f"Getting HDHomeRun Channel Guide for: {channel_number} {start_time}")
+    url = f"https://my.hdhomerun.com/api/guide.php?DeviceAuth={device_auth}&Channel={channel_number}"
+    if start_time is not None:
+        url += f"&Start={start_time}"
+    return utils.http_get_json_with_retry(url)
+
+
+def get_cached_hdhr_channel_guide(
+    cache_directory, device_auth, channel_number, start_time
+):
+    cache_filename = os.path.join(
+        cache_directory, str(channel_number), str(start_time) + ".json"
+    )
+
+    if os.path.isfile(cache_filename):
+        logging.info(
+            f"Getting cached HDHomeRun Channel Guide for: {channel_number} {start_time}"
+        )
+        return utils.load_json_from_file(cache_filename)
+
+    channel_guide = get_hdhr_channel_guide(device_auth, channel_number, start_time)
+    channel_data = next(iter(channel_guide or []), None)
+    if channel_data:
+        logging.info(
+            f"Caching HDHomeRun Channel Guide for: {channel_number} {start_time}"
+        )
+        utils.save_json_to_file(cache_filename, channel_guide)
+    return channel_guide
 
 
 def generate_m3u(output_directory, device_id, lineup):
     logging.info(f"Generating M3U for {device_id}")
-    newline = "\r\n"
-    m3u_data = "#EXTM3U"
+    m3u_lines = ["#EXTM3U"]
     for channel in lineup:
         channel_number = channel.get("GuideNumber")
         channel_name = channel.get("GuideName")
@@ -168,24 +163,26 @@ def generate_m3u(output_directory, device_id, lineup):
         channel_favorite = channel.get("Favorite")
         channel_hd = channel.get("HD")
 
-        m3u_data += newline
-        m3u_data += f'#EXTINF:-1 channel-id="{channel_number}" channel-number="{channel_number}" tvg-id="{channel_number}" tvg-name="{channel_name}" tvg-chno="{channel_number}",{channel_name}'
+        m3u_lines.append(
+            f'#EXTINF:-1 channel-id="{channel_number}" channel-number="{channel_number}" tvg-id="{channel_number}" tvg-name="{channel_name}" tvg-chno="{channel_number}",{channel_name}'
+        )
         if channel_favorite:
-            m3u_data += newline
-            m3u_data += "#EXTGRP:Favorites"
+            m3u_lines.append("#EXTGRP:Favorites")
             if channel_hd:
-                m3u_data += ";HD"
+                m3u_lines[-1] += ";HD"  # Append ";HD" to the previous line
         elif channel_hd:
-            m3u_data += newline
-            m3u_data += "#EXTGRP:HD"
-        m3u_data += newline
-        m3u_data += channel_url
-    m3u_data += newline
-    with open(os.path.join(output_directory, f"{device_id}.m3u"), "w") as m3u_file:
-        m3u_file.write(m3u_data)
+            m3u_lines.append("#EXTGRP:HD")
+        m3u_lines.append(channel_url)
+
+    m3u_lines.append("")
+
+    m3u_filename = os.path.join(output_directory, f"{device_id}.m3u")
+    os.makedirs(os.path.dirname(m3u_filename), exist_ok=True)
+    with open(m3u_filename, "w") as m3u_file:
+        m3u_file.write("\r\n".join(m3u_lines))
 
 
-def generate_xmltv(output_directory):
+def generate_xmltv(output_directory, cache_directory):
     logging.info("Getting HDHomeRun Devices")
     try:
         devices = get_hdhr_devices()
@@ -206,7 +203,7 @@ def generate_xmltv(output_directory):
                     logging.info(f"Processing Device: {device_id}")
 
                     logging.info("Getting HDHomeRun Lineup")
-                    lineup = http_get_json(lineup_url)
+                    lineup = utils.http_get_json(lineup_url)
 
                     generate_m3u(output_directory, device_id, lineup)
 
@@ -215,13 +212,9 @@ def generate_xmltv(output_directory):
                         for channel in lineup:
                             channel_number = channel.get("GuideNumber")
                             if channel_number not in parsed_channels:
-                                logging.info(
-                                    f"Getting HDHomeRun channel guide for channel {channel_number}"
+                                channel_guide = get_hdhr_channel_guide(
+                                    device_auth, channel_number
                                 )
-                                channel_guide = http_get_json(
-                                    f"https://my.hdhomerun.com/api/guide.php?DeviceAuth={device_auth}&Channel={channel_number}"
-                                )
-
                                 channel_data = next(iter(channel_guide or []), None)
                                 if channel_data is not None:
                                     parse_channel(xml_root, channel_data)
@@ -236,14 +229,12 @@ def generate_xmltv(output_directory):
                                             )
 
                                         next_start_time = last_end_time + 1
-
-                                        logging.info(
-                                            f"Getting HDHomeRun channel guide for channel {channel_number} with start time {datetime.fromtimestamp(next_start_time)}"
+                                        channel_guide = get_cached_hdhr_channel_guide(
+                                            cache_directory,
+                                            device_auth,
+                                            channel_number,
+                                            next_start_time,
                                         )
-                                        channel_guide = http_get_json(
-                                            f"https://my.hdhomerun.com/api/guide.php?DeviceAuth={device_auth}&Channel={channel_number}&Start={next_start_time}"
-                                        )
-
                                         channel_data = next(
                                             iter(channel_guide or []), None
                                         )
@@ -268,9 +259,10 @@ def generate_xmltv(output_directory):
                     logging.info("No DeviceID")
 
             logging.info("Finished parsing information")
-            output_file = os.path.join(output_directory, f"hdhr.xml")
+            xmltv_filename = os.path.join(output_directory, f"hdhr.xml")
+            os.makedirs(os.path.dirname(xmltv_filename), exist_ok=True)
             ET.ElementTree(xml_root).write(
-                output_file, encoding="utf-8", xml_declaration=True
+                xmltv_filename, encoding="utf-8", xml_declaration=True
             )
             logging.info("Saved XMLTV")
         else:
@@ -289,7 +281,7 @@ def main():
         "-l",
         "--log-file",
         type=argparse.FileType("w"),
-        default=os.path.join(os.path.curdir, "hdhr2iptv.log"),
+        default=os.path.join(os.path.curdir, "output", "hdhr2iptv.log"),
         help="output log filename",
     )
 
@@ -303,9 +295,17 @@ def main():
     parser.add_argument(
         "-o",
         "--output-directory",
-        type=directory,
-        default=os.path.curdir,
+        type=utils.directory,
+        default=os.path.join(os.path.curdir, "output"),
         help="output directory for m3u and xml",
+    )
+
+    parser.add_argument(
+        "-c",
+        "--cache-directory",
+        type=utils.directory,
+        default=os.path.join(os.path.curdir, "cache"),
+        help="cache directory for json",
     )
     parser.add_argument("-v", "--version", action="version", version="%(prog)s 2.0.0")
 
@@ -315,20 +315,23 @@ def main():
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
         handlers=[
-            logging.FileHandler(args.log_file.name, mode="w"),
+            TimedRotatingFileHandler(args.log_file.name, when="D"),
             logging.StreamHandler(),
         ],
     )
 
-    try:
-        if args.run_daily_hour is None:
-            generate_xmltv(args.output_directory)
-        else:
-            while True:
-                generate_xmltv(args.output_directory)
-                sleep_until_hour(args.run_daily_hour)
-    except:
-        logging.exception("Unhandled exception occurred.")
+    if args.run_daily_hour is None:
+        generate_xmltv(args.output_directory, args.cache_directory)
+        utils.delete_files_created_30_days_ago(args.cache_directory)
+    else:
+        while True:
+            utils.sleep_until_hour(args.run_daily_hour)
+            try:
+                generate_xmltv(args.output_directory, args.cache_directory)
+                utils.delete_files_created_30_days_ago(args.cache_directory)
+            except:
+                logging.exception("Unhandled exception occurred.")
+    
 
 
 if __name__ == "__main__":
