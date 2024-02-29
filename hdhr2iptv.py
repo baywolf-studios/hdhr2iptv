@@ -287,7 +287,7 @@ def main():
     parser.add_argument(
         "-o",
         "--output-directory",
-        type=utils.directory,
+        type=os.path.abspath,
         default=os.path.join(os.path.curdir, "output"),
         help="output directory for m3u and xml",
     )
@@ -295,7 +295,7 @@ def main():
     parser.add_argument(
         "-c",
         "--cache-directory",
-        type=utils.directory,
+        type=os.path.abspath,
         default=os.path.join(os.path.curdir, "cache"),
         help="cache directory for json",
     )

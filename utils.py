@@ -30,10 +30,6 @@ def sleep_until_hour(hour):
     time.sleep((future - today).total_seconds())
 
 
-def directory(raw_path):
-    return os.path.abspath(raw_path)
-
-
 def convert_timestamp_to_xmltv_datetime(timestamp):
     return datetime.fromtimestamp(timestamp, tz=LOCAL_TIMEZONE).strftime(
         "%Y%m%d%H%M%S %z"
