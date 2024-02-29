@@ -31,10 +31,6 @@ def sleep_until_hour(hour):
 
 
 def directory(raw_path):
-    if not os.path.isdir(raw_path):
-        raise argparse.ArgumentTypeError(
-            '"{}" is not an existing directory'.format(raw_path)
-        )
     return os.path.abspath(raw_path)
 
 

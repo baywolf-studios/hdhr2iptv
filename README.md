@@ -3,18 +3,18 @@ Generates M3U files and a XMLTV file for HDHomeRun devices
 
 ## Help
 ```
-usage: hdhr2iptv [-h] [-l LOG_FILE] [-s RUN_DAILY_HOUR] [-o OUTPUT_DIRECTORY] [-v]
+usage: hdhr2iptv [-h] [-s RUN_DAILY_HOUR] [-o OUTPUT_DIRECTORY] [-c CACHE_DIRECTORY] [-v]
 
 Generates M3U files and a XMLTV file for HDHomeRun devices
 
 options:
   -h, --help            show this help message and exit
-  -l LOG_FILE, --log-file LOG_FILE
-                        output log filename
   -s RUN_DAILY_HOUR, --run-daily-hour RUN_DAILY_HOUR
                         will loop and run daily at this hour
   -o OUTPUT_DIRECTORY, --output-directory OUTPUT_DIRECTORY
                         output directory for m3u and xml
+  -c CACHE_DIRECTORY, --cache-directory CACHE_DIRECTORY
+                        cache directory for json
   -v, --version         show program's version number and exit
 
 Thanks for using hdhr2iptv! :)

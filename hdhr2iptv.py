@@ -278,14 +278,6 @@ def main():
     )
 
     parser.add_argument(
-        "-l",
-        "--log-file",
-        type=argparse.FileType("w"),
-        default=os.path.join(os.path.curdir, "output", "hdhr2iptv.log"),
-        help="output log filename",
-    )
-
-    parser.add_argument(
         "-s",
         "--run-daily-hour",
         type=int,
@@ -311,11 +303,16 @@ def main():
 
     args = parser.parse_args()
 
+    os.makedirs(args.output_directory, exist_ok=True)
+    os.makedirs(args.cache_directory, exist_ok=True)
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
         handlers=[
-            TimedRotatingFileHandler(args.log_file.name, when="D"),
+            TimedRotatingFileHandler(
+                os.path.join(args.output_directory, "hdhr2iptv.log"), when="D"
+            ),
             logging.StreamHandler(),
         ],
     )
