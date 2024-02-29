@@ -53,7 +53,6 @@ def load_json_from_file(filename):
 
 
 def http_get_json(url):
-    logging.info(url)
     try:
         with urllib.request.urlopen(url) as r:
             data = json.loads(r.read().decode(r.info().get_param("charset") or "utf-8"))
