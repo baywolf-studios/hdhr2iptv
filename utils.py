@@ -8,15 +8,17 @@ from datetime import datetime, timezone, timedelta
 
 LOCAL_TIMEZONE = datetime.now(timezone.utc).astimezone().tzinfo
 
+
 def delete_files_created_30_days_ago(directory):
     thirty_days_ago = datetime.now() - timedelta(days=30)
-    
+
     for file in os.listdir(directory):
         file_path = os.path.join(directory, file)
         if os.path.isfile(file_path):
             created_time = datetime.fromtimestamp(os.path.getctime(file_path))
             if created_time < thirty_days_ago:
                 os.remove(file_path)
+
 
 def sleep_until_hour(hour):
     today = datetime.today()
@@ -40,6 +42,7 @@ def convert_timestamp_to_xmltv_datetime(timestamp):
     return datetime.fromtimestamp(timestamp, tz=LOCAL_TIMEZONE).strftime(
         "%Y%m%d%H%M%S %z"
     )
+
 
 def save_json_to_file(filename, json_data):
     os.makedirs(os.path.dirname(filename), exist_ok=True)

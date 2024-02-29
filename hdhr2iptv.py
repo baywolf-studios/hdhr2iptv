@@ -331,7 +331,6 @@ def main():
                 utils.delete_files_created_30_days_ago(args.cache_directory)
             except:
                 logging.exception("Unhandled exception occurred.")
-    
 
 
 if __name__ == "__main__":
