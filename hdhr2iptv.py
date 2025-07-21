@@ -124,7 +124,7 @@ def parse_channel(xml_root, channel):
 
 def get_hdhr_channel_guide(device_auth, channel_number, start_time=None):
     logging.info(f"Getting HDHomeRun Channel Guide for: {channel_number} {start_time}")
-    url = f"https://my.hdhomerun.com/api/guide.php?DeviceAuth={device_auth}&Channel={channel_number}"
+    url = f"https://api.hdhomerun.com/api/guide.php?DeviceAuth={device_auth}&Channel={channel_number}"
     if start_time is not None:
         url += f"&Start={start_time}"
     return utils.http_get_json_with_retry(url)
@@ -241,11 +241,17 @@ def generate_xmltv(output_directory, cache_directory):
 
                                         if channel_data is not None:
                                             guide_data = channel_data["Guide"]
+                                            if len(guide_data) == 0:
+                                                logging.info(
+                                                    f"No more guide for channel: {channel_number}"
+                                                )
+                                                guide_data = None
                                         else:
                                             logging.info(
                                                 f"No more guide for channel: {channel_number}"
                                             )
                                             guide_data = None
+
                                 else:
                                     logging.info(
                                         f"No guide for channel: {channel_number}"
