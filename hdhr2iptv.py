@@ -1,6 +1,7 @@
 import argparse
 import logging
 import os
+import re
 import sys
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, timezone
@@ -37,10 +38,11 @@ def parse_program(xml_root, program, channel_number):
     season = original_air_date.year
     episode = int(f"{original_air_date.month:02}{(original_air_date.day):02}")
     if has_episode_number:
-        season_str, episode_str = program["EpisodeNumber"].split("S")[
-            1].split("E")
-        season = int(season_str)
-        episode = int(episode_str)
+        season_episode_matches = re.match(
+            r"S(\d+)E(\d+)", program["EpisodeNumber"])
+        if season_episode_matches:
+            season = int(season_episode_matches.group(1))
+            episode = int(season_episode_matches.group(2))
 
     xml_program = ET.SubElement(xml_root, "programme", channel=channel_number)
 
@@ -80,7 +82,11 @@ def parse_program(xml_root, program, channel_number):
             xml_program, "episode-num", system="original-air-date"
         ).text = str(original_air_date)
 
-    if "ImageURL" in program:
+    if is_movie and "PosterURL" in program:
+        ET.SubElement(xml_program, "icon", src=program["PosterURL"])
+        ET.SubElement(xml_program, "image",
+                      type="poster").text = program["PosterURL"]
+    elif "ImageURL" in program:
         ET.SubElement(xml_program, "icon", src=program["ImageURL"])
 
     xmlAudio = ET.SubElement(xml_program, "audio")
@@ -279,33 +285,22 @@ def generate_xmltv(output_directory, cache_directory):
 
 def main():
 
-    parser = argparse.ArgumentParser(
-        prog="hdhr2iptv",
-        description="Generates M3U files and a XMLTV file for HDHomeRun devices",
-        epilog="Thanks for using %(prog)s! :)",
-    )
+    parser = argparse.ArgumentParser(prog="hdhr2iptv", description="Generates M3U files and a XMLTV file for HDHomeRun devices", epilog="Thanks for using %(prog)s! :)",
+                                     )
 
     parser.add_argument(
         "-s",
-        "--run-daily-hour",
-        type=int,
-        help="will loop and run daily at this hour",
+        "--run-daily-hour", type=int, help="will loop and run daily at this hour",
     )
 
     parser.add_argument(
         "-o",
-        "--output-directory",
-        type=os.path.abspath,
-        default=os.path.join(os.path.curdir, "output"),
-        help="output directory for m3u and xml",
+        "--output-directory", type=os.path.abspath, default=os.path.join(os.path.curdir, "output"), help="output directory for m3u and xml",
     )
 
     parser.add_argument(
         "-c",
-        "--cache-directory",
-        type=os.path.abspath,
-        default=os.path.join(os.path.curdir, "cache"),
-        help="cache directory for json",
+        "--cache-directory", type=os.path.abspath, default=os.path.join(os.path.curdir, "cache"), help="cache directory for json",
     )
     parser.add_argument("-v", "--version", action="version",
                         version="%(prog)s 2.0.0")
@@ -315,15 +310,12 @@ def main():
     os.makedirs(args.output_directory, exist_ok=True)
     os.makedirs(args.cache_directory, exist_ok=True)
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[
-            TimedRotatingFileHandler(
-                os.path.join(args.output_directory, "hdhr2iptv.log"), when="D"
-            ),
-            logging.StreamHandler(),
-        ],
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", handlers=[
+        TimedRotatingFileHandler(
+            os.path.join(args.output_directory, "hdhr2iptv.log"), when="D", backupCount=30
+        ),
+        logging.StreamHandler(),
+    ],
     )
 
     if args.run_daily_hour is None:
