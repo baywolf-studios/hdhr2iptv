@@ -32,7 +32,7 @@ def parse_program(xml_root, program, channel_number):
             program["OriginalAirdate"], timezone.utc
         ).date()
         current_air_date = datetime.fromtimestamp(program["StartTime"]).date()
-        is_new = original_air_date >= current_air_date
+        is_new = original_air_date == current_air_date
 
     season = original_air_date.year
     episode = int(f"{original_air_date.month:02}{(original_air_date.day):02}")
