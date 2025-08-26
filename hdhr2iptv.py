@@ -15,10 +15,39 @@ def parse_program(xml_root, program, channel_number):
     title = program["Title"]
     logging.info(f"Parsing Channel: {channel_number} Program: {title}")
 
+    categories = []
+    is_movie = False
+    if "Filter" in program:
+        for category in program["Filter"]:
+            categories.append(category)
+            if str(category).lower() == "movies":
+                is_movie = True
+                categories.append("Movie")
+    if "EpisodeNumber" in program:
+        categories.append("Series")
+
+    is_episode = not is_movie and ("EpisodeTitle" in program or "EpisodeNumber" in program)
+
+    is_new = False
+    original_air_date = date.today()
+    if "OriginalAirdate" in program:
+        original_air_date = datetime.fromtimestamp(
+            program["OriginalAirdate"], timezone.utc
+        ).date()
+        current_air_date = datetime.fromtimestamp(program["StartTime"]).date()
+        is_new = original_air_date >= current_air_date
+
+    season = original_air_date.year
+    episode = int(f"{original_air_date.month:02}{(original_air_date.day):02}")
+    if "EpisodeNumber" in program:
+        season = int(program["EpisodeNumber"].split("S")[1].split("E")[0])
+        episode = int(program["EpisodeNumber"].split("S")[1].split("E")[1])
+
     xml_program = ET.SubElement(xml_root, "programme", channel=channel_number)
 
     xml_program.set(
-        "start", utils.convert_timestamp_to_xmltv_datetime(program["StartTime"])
+        "start", utils.convert_timestamp_to_xmltv_datetime(
+            program["StartTime"])
     )
 
     xml_program.set(
@@ -38,23 +67,19 @@ def parse_program(xml_root, program, channel_number):
     # Add a blank credits to satisfy Plex
     ET.SubElement(xml_program, "credits").text = ""
 
-    if "EpisodeNumber" in program:
-        # Fake the xml version
-        season = str(int(program["EpisodeNumber"].split("S")[1].split("E")[0]) - 1)
-        episode = str(int(program["EpisodeNumber"].split("S")[1].split("E")[1]) - 1)
+    if is_episode:
         ET.SubElement(xml_program, "episode-num", system="xmltv_ns").text = (
-            season + "." + episode + "."
+            f"{(season - 1):02}.{(episode - 1):02}."
         )
 
-        ET.SubElement(xml_program, "episode-num", system="onscreen").text = program[
-            "EpisodeNumber"
-        ]
+        ET.SubElement(xml_program, "episode-num",
+                      system="onscreen").text = f"S{season:02}E{episode:02}"
+        ET.SubElement(xml_program, "episode-num",
+                      system="SxxExx").text = f"S{season:02}E{episode:02}"
 
-        ET.SubElement(xml_program, "episode-num", system="SxxExx").text = program[
-            "EpisodeNumber"
-        ]
-
-        ET.SubElement(xml_program, "category", lang="en").text = "Series"
+        ET.SubElement(
+            xml_program, "episode-num", system="original-air-date"
+        ).text = str(original_air_date)
 
     if "ImageURL" in program:
         ET.SubElement(xml_program, "icon", src=program["ImageURL"])
@@ -63,40 +88,18 @@ def parse_program(xml_root, program, channel_number):
     ET.SubElement(xmlAudio, "stereo").text = "stereo"
     ET.SubElement(xml_program, "subtitles", type="teletext")
 
-    is_movie = False
-    if "Filter" in program:
-        for category in program["Filter"]:
-            ET.SubElement(xml_program, "category", lang="en").text = category
-            if str(category).lower() == "movies":
-                ET.SubElement(xml_program, "category", lang="en").text = "Movie"
-                is_movie = True
+    for category in categories:
+        ET.SubElement(xml_program, "category", lang="en").text = category
 
-    if not is_movie:
-        if "OriginalAirdate" in program:
-
-            original_air_date = datetime.fromtimestamp(
-                program["OriginalAirdate"], timezone.utc
-            ).date()
-            current_air_date = datetime.fromtimestamp(program["StartTime"]).date()
-            if original_air_date < current_air_date:
-                ET.SubElement(xml_program, "previously-shown")
-                ET.SubElement(xml_program, "previously-aired")
-            else:
-                ET.SubElement(
-                    xml_program,
-                    "new",
-                )
-            ET.SubElement(
-                xml_program, "episode-num", system="original_air_date"
-            ).text = str(original_air_date)
-        else:
+    if is_episode:
+        if is_new:
             ET.SubElement(
                 xml_program,
                 "new",
             )
-            ET.SubElement(
-                xml_program, "episode-num", system="original_air_date"
-            ).text = str(date.today())
+        else:
+            ET.SubElement(xml_program, "previously-shown")
+            ET.SubElement(xml_program, "previously-aired")
 
     # Return the endtime so we know where to start from on next loop.
     return program["EndTime"]
@@ -110,11 +113,13 @@ def parse_channel(xml_root, channel, channel_data):
     xml_channel = ET.SubElement(xml_root, "channel", id=channel_number)
 
     if "Affiliate" in channel_data:
-        ET.SubElement(xml_channel, "display-name").text = channel_data.get("Affiliate")
+        ET.SubElement(
+            xml_channel, "display-name").text = channel_data.get("Affiliate")
 
     ET.SubElement(xml_channel, "display-name").text = channel.get("GuideName")
 
-    ET.SubElement(xml_channel, "display-name").text = channel_data.get("GuideName")
+    ET.SubElement(
+        xml_channel, "display-name").text = channel_data.get("GuideName")
 
     ET.SubElement(xml_channel, "display-name").text = channel_number
 
@@ -125,7 +130,8 @@ def parse_channel(xml_root, channel, channel_data):
 
 
 def get_hdhr_channel_guide(device_auth, channel_number, start_time=None):
-    logging.info(f"Getting HDHomeRun Channel Guide for: {channel_number} {start_time}")
+    logging.info(
+        f"Getting HDHomeRun Channel Guide for: {channel_number} {start_time}")
     url = f"https://api.hdhomerun.com/api/guide.php?DeviceAuth={device_auth}&Channel={channel_number}"
     if start_time is not None:
         url += f"&Start={start_time}"
@@ -145,7 +151,8 @@ def get_cached_hdhr_channel_guide(
         )
         return utils.load_json_from_file(cache_filename)
 
-    channel_guide = get_hdhr_channel_guide(device_auth, channel_number, start_time)
+    channel_guide = get_hdhr_channel_guide(
+        device_auth, channel_number, start_time)
     channel_data = next(iter(channel_guide or []), None)
     if channel_data:
         logging.info(
@@ -217,9 +224,11 @@ def generate_xmltv(output_directory, cache_directory):
                                 channel_guide = get_hdhr_channel_guide(
                                     device_auth, channel_number
                                 )
-                                channel_data = next(iter(channel_guide or []), None)
+                                channel_data = next(
+                                    iter(channel_guide or []), None)
                                 if channel_data is not None:
-                                    parse_channel(xml_root, channel, channel_data)
+                                    parse_channel(
+                                        xml_root, channel, channel_data)
                                     guide_data = channel_data["Guide"]
 
                                     while guide_data is not None:
@@ -260,7 +269,8 @@ def generate_xmltv(output_directory, cache_directory):
                                     )
                                 parsed_channels.append(channel_number)
                             else:
-                                logging.info(f"Skipping channel: {channel_number}")
+                                logging.info(
+                                    f"Skipping channel: {channel_number}")
                     else:
                         logging.info(f"No lineup for device: {device_id}")
                 else:
@@ -307,7 +317,8 @@ def main():
         default=os.path.join(os.path.curdir, "cache"),
         help="cache directory for json",
     )
-    parser.add_argument("-v", "--version", action="version", version="%(prog)s 2.0.0")
+    parser.add_argument("-v", "--version", action="version",
+                        version="%(prog)s 2.0.0")
 
     args = parser.parse_args()
 
