@@ -1,5 +1,4 @@
 import argparse
-import datetime
 import logging
 import os
 import sys
@@ -15,18 +14,16 @@ def parse_program(xml_root, program, channel_number):
     title = program["Title"]
     logging.info(f"Parsing Channel: {channel_number} Program: {title}")
 
-    categories = []
-    is_movie = False
-    if "Filter" in program:
-        for category in program["Filter"]:
-            categories.append(category)
-            if str(category).lower() == "movies":
-                is_movie = True
-                categories.append("Movie")
+    categories = list(program.get("Filter", []))
+    is_movie = any(str(cat).lower() == "movies" for cat in categories)
+    if is_movie:
+        categories.append("Movie")
+
     if "EpisodeNumber" in program:
         categories.append("Series")
 
-    is_episode = not is_movie and ("EpisodeTitle" in program or "EpisodeNumber" in program)
+    is_episode = not is_movie and (
+        "EpisodeTitle" in program or "EpisodeNumber" in program)
 
     is_new = False
     original_air_date = date.today()
@@ -40,8 +37,10 @@ def parse_program(xml_root, program, channel_number):
     season = original_air_date.year
     episode = int(f"{original_air_date.month:02}{(original_air_date.day):02}")
     if "EpisodeNumber" in program:
-        season = int(program["EpisodeNumber"].split("S")[1].split("E")[0])
-        episode = int(program["EpisodeNumber"].split("S")[1].split("E")[1])
+        season_str, episode_str = program["EpisodeNumber"].split("S")[
+            1].split("E")
+        season = int(season_str)
+        episode = int(episode_str)
 
     xml_program = ET.SubElement(xml_root, "programme", channel=channel_number)
 
@@ -201,7 +200,7 @@ def generate_xmltv(output_directory, cache_directory):
         if devices:
             logging.info("Generating XMLTV")
             xml_root = ET.Element("tv")
-            parsed_channels = []
+            parsed_channels = set()
 
             for device in devices:
                 if "DeviceID" in device:
@@ -213,10 +212,9 @@ def generate_xmltv(output_directory, cache_directory):
 
                     logging.info("Getting HDHomeRun Lineup")
                     lineup = utils.http_get_json(lineup_url)
-
-                    generate_m3u(output_directory, device_id, lineup)
-
                     if lineup is not None:
+                        generate_m3u(output_directory, device_id, lineup)
+
                         logging.info(f"Lineup exists for device: {device_id}")
                         for channel in lineup:
                             channel_number = channel.get("GuideNumber")
@@ -247,27 +245,19 @@ def generate_xmltv(output_directory, cache_directory):
                                             next_start_time,
                                         )
                                         channel_data = next(
-                                            iter(channel_guide or []), None
-                                        )
+                                            iter(channel_guide or []), None)
+                                        guide_data = channel_data.get(
+                                            "Guide") if channel_data else None
 
-                                        if channel_data is not None:
-                                            guide_data = channel_data["Guide"]
-                                            if len(guide_data) == 0:
-                                                logging.info(
-                                                    f"No more guide for channel: {channel_number}"
-                                                )
-                                                guide_data = None
-                                        else:
+                                        if not guide_data:
                                             logging.info(
-                                                f"No more guide for channel: {channel_number}"
-                                            )
-                                            guide_data = None
+                                                f"No more guide for channel: {channel_number}")
 
                                 else:
                                     logging.info(
                                         f"No guide for channel: {channel_number}"
                                     )
-                                parsed_channels.append(channel_number)
+                                parsed_channels.add(channel_number)
                             else:
                                 logging.info(
                                     f"Skipping channel: {channel_number}")
