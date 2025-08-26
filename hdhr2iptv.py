@@ -102,22 +102,24 @@ def parse_program(xml_root, program, channel_number):
     return program["EndTime"]
 
 
-def parse_channel(xml_root, channel):
-    channel_number = channel.get("GuideNumber")
+def parse_channel(xml_root, channel, channel_data):
+    channel_number = channel_data.get("GuideNumber")
 
     logging.info(f"Parsing Channel: {channel_number}")
 
     xml_channel = ET.SubElement(xml_root, "channel", id=channel_number)
 
-    ET.SubElement(xml_channel, "display-name").text = channel_number
+    if "Affiliate" in channel_data:
+        ET.SubElement(xml_channel, "display-name").text = channel_data.get("Affiliate")
 
     ET.SubElement(xml_channel, "display-name").text = channel.get("GuideName")
 
-    if "Affiliate" in channel:
-        ET.SubElement(xml_channel, "display-name").text = channel.get("Affiliate")
+    ET.SubElement(xml_channel, "display-name").text = channel_data.get("GuideName")
 
-    if "ImageURL" in channel:
-        ET.SubElement(xml_channel, "icon", src=channel.get("ImageURL"))
+    ET.SubElement(xml_channel, "display-name").text = channel_number
+
+    if "ImageURL" in channel_data:
+        ET.SubElement(xml_channel, "icon", src=channel_data.get("ImageURL"))
 
     return xml_channel
 
@@ -217,7 +219,7 @@ def generate_xmltv(output_directory, cache_directory):
                                 )
                                 channel_data = next(iter(channel_guide or []), None)
                                 if channel_data is not None:
-                                    parse_channel(xml_root, channel_data)
+                                    parse_channel(xml_root, channel, channel_data)
                                     guide_data = channel_data["Guide"]
 
                                     while guide_data is not None:
