@@ -15,15 +15,15 @@ def parse_program(xml_root, program, channel_number):
     logging.info(f"Parsing Channel: {channel_number} Program: {title}")
 
     categories = list(program.get("Filter", []))
-    is_movie = any(str(cat).lower() == "movies" for cat in categories)
+    is_movie = any(str(category).lower() ==
+                   "movies" for category in categories)
+    has_episode_number = "EpisodeNumber" in program
+    has_episode_title = "EpisodeTitle" in program
+    is_episode = not is_movie and (has_episode_number or has_episode_title)
     if is_movie:
         categories.append("Movie")
-
-    if "EpisodeNumber" in program:
+    if has_episode_number:
         categories.append("Series")
-
-    is_episode = not is_movie and (
-        "EpisodeTitle" in program or "EpisodeNumber" in program)
 
     is_new = False
     original_air_date = date.today()
@@ -36,7 +36,7 @@ def parse_program(xml_root, program, channel_number):
 
     season = original_air_date.year
     episode = int(f"{original_air_date.month:02}{(original_air_date.day):02}")
-    if "EpisodeNumber" in program:
+    if has_episode_number:
         season_str, episode_str = program["EpisodeNumber"].split("S")[
             1].split("E")
         season = int(season_str)
@@ -55,7 +55,7 @@ def parse_program(xml_root, program, channel_number):
 
     ET.SubElement(xml_program, "title", lang="en").text = title
 
-    if "EpisodeTitle" in program:
+    if has_episode_title:
         ET.SubElement(xml_program, "sub-title", lang="en").text = program[
             "EpisodeTitle"
         ]
