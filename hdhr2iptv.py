@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import logging
 import os
 import re
@@ -6,7 +7,6 @@ import sys
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, timezone
 from logging.handlers import TimedRotatingFileHandler
-
 from libhdhr import get_hdhr_devices
 import utils
 
@@ -35,15 +35,6 @@ def parse_program(xml_root, program, channel_number):
         current_air_date = datetime.fromtimestamp(program["StartTime"]).date()
         is_new = original_air_date == current_air_date
 
-    season = original_air_date.year
-    episode = int(f"{original_air_date.month:02}{(original_air_date.day):02}")
-    if has_episode_number:
-        season_episode_matches = re.match(
-            r"S(\d+)E(\d+)", program["EpisodeNumber"])
-        if season_episode_matches:
-            season = int(season_episode_matches.group(1))
-            episode = int(season_episode_matches.group(2))
-
     xml_program = ET.SubElement(xml_root, "programme", channel=channel_number)
 
     xml_program.set(
@@ -69,6 +60,22 @@ def parse_program(xml_root, program, channel_number):
     ET.SubElement(xml_program, "credits").text = ""
 
     if is_episode:
+        season = 1
+        episode = 1
+
+        if has_episode_number:
+            season_episode_matches = re.match(
+                r"S(\d+)E(\d+)", program.get("EpisodeNumber", ""))
+            if season_episode_matches:
+                season = int(season_episode_matches.group(1))
+                episode = int(season_episode_matches.group(2))
+        else:
+            title_hash = int(hashlib.shake_128(program.get(
+                "EpisodeTitle").encode()).hexdigest(2), 16)
+            season = original_air_date.year
+            episode = int(
+                f"{original_air_date.timetuple().tm_yday:03d}{title_hash:05d}")
+
         ET.SubElement(xml_program, "episode-num", system="xmltv_ns").text = (
             f"{(season - 1):02}.{(episode - 1):02}."
         )
