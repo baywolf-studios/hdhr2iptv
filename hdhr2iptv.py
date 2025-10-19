@@ -4,6 +4,7 @@ import logging
 import os
 import re
 import sys
+import urllib
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, timezone
 from logging.handlers import TimedRotatingFileHandler
@@ -147,7 +148,16 @@ def get_hdhr_channel_guide(device_auth, channel_number, start_time=None):
     url = f"https://api.hdhomerun.com/api/guide.php?DeviceAuth={device_auth}&Channel={channel_number}"
     if start_time is not None:
         url += f"&Start={start_time}"
-    return utils.http_get_json_with_retry(url)
+    try:
+        return utils.http_get_json_with_retry(url)
+    except urllib.error.HTTPError as e:
+        if e.code == 400:
+            logging.info(
+                f"No guide data available for channel {channel_number} at start_time {start_time} (400 Bad Request)."
+            )
+            return None
+        else:
+            raise
 
 
 def get_cached_hdhr_channel_guide(

@@ -52,7 +52,7 @@ def http_get_json(url):
             data = json.loads(r.read().decode(r.info().get_param("charset") or "utf-8"))
             return data
     except urllib.error.HTTPError as e:
-        logging.exception(e.message)
+        logging.exception("http_get_json failed")
         if e.status != 307 and e.status != 308:
             raise
         redirected_url = urllib.parse.urljoin(url, e.headers["Location"])
@@ -65,6 +65,8 @@ def http_get_json_with_retry(url, max_retries=5, retry_delay=1):
             time.sleep(retry_delay * retry_count)
             return http_get_json(url)
         except urllib.error.URLError as e:
+            if e.code == 400:
+                raise
             if retry_count != max_retries:
                 logging.warning(f"Attempting request {retry_count} for: {url}")
                 continue
