@@ -320,7 +320,7 @@ def main():
         "--cache-directory", type=os.path.abspath, default=os.path.join(os.path.curdir, "cache"), help="cache directory for json",
     )
     parser.add_argument("-v", "--version", action="version",
-                        version="%(prog)s 2.0.0")
+                        version="%(prog)s 3.0.2")
 
     args = parser.parse_args()
 
